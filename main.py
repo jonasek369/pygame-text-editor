@@ -125,14 +125,21 @@ class Editor:
 
         if event.key == pygame.K_BACKSPACE:
             if self.cursor.pos.x == 0 and self.cursor.pos.y != 0:
-                self.buffer.data.pop(self.cursor.pos.y)
+                removed = self.buffer.data.pop(self.cursor.pos.y)
                 self.cursor.pos.y -= 1
                 self.cursor.pos.x = len(self.buffer.data[self.cursor.pos.y])
+                self.buffer.data[self.cursor.pos.y] += removed
             else:
-                self.buffer.data[self.cursor.pos.y] = self.buffer.data[self.cursor.pos.y][:self.cursor.pos.x-1] + \
-                                                      self.buffer.data[self.cursor.pos.y][self.cursor.pos.x:]
                 if not self.cursor.pos.x <= 0:
+                    self.buffer.data[self.cursor.pos.y] = self.buffer.data[self.cursor.pos.y][:self.cursor.pos.x - 1] + \
+                                                          self.buffer.data[self.cursor.pos.y][self.cursor.pos.x:]
                     self.cursor.pos.x -= 1
+
+        if event.key == pygame.K_RETURN:
+            first, second = self.buffer.data[self.cursor.pos.y][:self.cursor.pos.x], self.buffer.data[self.cursor.pos.y][self.cursor.pos.x:]
+            self.buffer.data.pop(self.cursor.pos.y)
+            self.buffer.data.insert(self.cursor.pos.y, first)
+            self.buffer.data.insert(self.cursor.pos.y+1, second)
 
     def loop(self):
         while self.running:
