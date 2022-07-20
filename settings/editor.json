@@ -1,7 +1,10 @@
 {
     "font": "Arial",
-    "font-size": 12,
+    "font-size": 24,
+    "font-antialias": true,
     "window-resizable": true,
     "window-resolution": [1280, 720],
-    "color-background": [24, 24, 24]
+    "window-refreshrate": 240,
+    "color-background": [24, 24, 24],
+    "color-text": [255, 255, 255]
 }
