@@ -101,7 +101,9 @@ class Editor:
             self.screen.blit(render, (0, pos * size))
 
     def handle_texinput_event(self, event: pygame.event.Event):
-        pass
+        self.buffer.data[self.cursor.pos.y] = self.buffer.data[self.cursor.pos.y][:self.cursor.pos.x] + event.text + \
+                                              self.buffer.data[self.cursor.pos.y][self.cursor.pos.x:]
+        self.cursor.pos.x += 1
 
     def handle_key_event(self, event: pygame.event.Event):
         if event.key == pygame.K_UP:
@@ -111,7 +113,7 @@ class Editor:
             self.cursor.pos.y += 1
 
         # add newline to the buffer
-        for i in range(self.cursor.pos.y - len(self.buffer.data)+1):
+        for i in range(self.cursor.pos.y - len(self.buffer.data) + 1):
             self.buffer.data.append("")
 
         if event.key == pygame.K_LEFT:
@@ -120,6 +122,17 @@ class Editor:
         if event.key == pygame.K_RIGHT:
             if len(self.buffer.data[self.cursor.pos.y]) >= self.cursor.pos.x + 1:
                 self.cursor.pos.x += 1
+
+        if event.key == pygame.K_BACKSPACE:
+            if self.cursor.pos.x == 0 and self.cursor.pos.y != 0:
+                self.buffer.data.pop(self.cursor.pos.y)
+                self.cursor.pos.y -= 1
+                self.cursor.pos.x = len(self.buffer.data[self.cursor.pos.y])
+            else:
+                self.buffer.data[self.cursor.pos.y] = self.buffer.data[self.cursor.pos.y][:self.cursor.pos.x-1] + \
+                                                      self.buffer.data[self.cursor.pos.y][self.cursor.pos.x:]
+                if not self.cursor.pos.x <= 0:
+                    self.cursor.pos.x -= 1
 
     def loop(self):
         while self.running:
