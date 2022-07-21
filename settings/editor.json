@@ -6,5 +6,6 @@
     "window-resolution": [1280, 720],
     "window-refreshrate": 240,
     "color-background": [24, 24, 24],
-    "color-text": [255, 255, 255]
+    "color-text": [255, 255, 255],
+    "color-commandline": [0, 0, 255]
 }
