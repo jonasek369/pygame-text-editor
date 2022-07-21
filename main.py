@@ -1,6 +1,9 @@
 import json
+import sys
+import time
 
 import pygame
+import copy
 
 pygame.init()
 pygame.font.init()
@@ -10,6 +13,7 @@ default_settings = {
     "font": "Arial",
     "font-size": 24,
     "font-antialias": True,
+    "undo-size": 32,
     "window-resizable": True,
     "window-resolution": [1280, 720],
     "window-refreshrate": 240,
@@ -32,10 +36,10 @@ except FileNotFoundError:
 
 # gets the users settings or default if not set by user
 def get_setting(key_name):
-    if settings.get(key_name):
+    if settings.get(key_name) is not None:
         return settings.get(key_name)
     else:
-        default_settings.get(key_name)
+        return default_settings.get(key_name)
 
 
 BACKGROUND = get_setting("color-background")
@@ -78,12 +82,16 @@ class Editor:
 
         self.running = True
         self.cmd_mode = False
+        self.saved = False
 
         self.window = TextWindow(self.screen)
         self.buffer = Buffer()
         self.cmd_buffer = Buffer()
         self.cursor = Cursor()
         self.cmd_cursor = Cursor()
+
+        self.saves: [(Buffer, Cursor, float)] = []
+        self.add_to_undo()
 
         self.operating_file_name = "untitled"
 
@@ -122,6 +130,7 @@ class Editor:
             self.screen.blit(render, (0, pos * size))
 
     def handle_texinput_event(self, event: pygame.event.Event):
+        self.saved = False
         current_buffer = self.cmd_buffer.data if self.cmd_mode else self.buffer.data
         current_cursor = self.cmd_cursor if self.cmd_mode else self.cursor
 
@@ -129,16 +138,19 @@ class Editor:
                                                :current_cursor.pos.x] + event.text + \
                                                current_buffer[current_cursor.pos.y][current_cursor.pos.x:]
         current_cursor.pos.x += 1
+        # add new buffer for undo
+        self.add_to_undo()
 
     def parse_command(self):
         buf = self.cmd_buffer.data
         cmd = buf[0].lower().split(" ")
         if cmd[0] == ":w":
+            self.saved = True
             with open(self.operating_file_name, "w") as file:
                 text = "\n".join(self.buffer.data)
                 file.write(text)
         if cmd[0] == ":chn":
-            self.operating_file_name = "".join(cmd[1:])
+            self.operating_file_name = "".join(cmd[1])
         if cmd[0] == ":sav":
             name = "".join(cmd[1:])
             with open(name, "w") as file:
@@ -146,6 +158,10 @@ class Editor:
                 file.write(text)
         if cmd[0] == ":q":
             exit(0)
+
+    def add_to_undo(self):
+        print("adding buffer")
+        self.saves.insert(-1, (copy.deepcopy(self.buffer), copy.deepcopy(self.cursor), time.time()))
 
     def handle_key_event(self, event: pygame.event.Event):
         current_buffer = self.cmd_buffer.data if self.cmd_mode else self.buffer.data
@@ -170,21 +186,30 @@ class Editor:
 
         if event.key == pygame.K_BACKSPACE:
             if current_cursor.pos.x == 0 and current_cursor.pos.y != 0:
+                self.saved = False
                 removed = current_buffer.pop(current_cursor.pos.y)
                 current_cursor.pos.y -= 1
                 current_cursor.pos.x = len(current_buffer[current_cursor.pos.y])
                 current_buffer[current_cursor.pos.y] += removed
+                # add new buffer for undo
+                self.add_to_undo()
             else:
                 if not current_cursor.pos.x <= 0:
+                    self.saved = False
                     current_buffer[current_cursor.pos.y] = current_buffer[current_cursor.pos.y][
                                                            :current_cursor.pos.x - 1] + \
                                                            current_buffer[current_cursor.pos.y][current_cursor.pos.x:]
                     current_cursor.pos.x -= 1
+                    # add new buffer for undo
+                    self.add_to_undo()
         if event.key == pygame.K_TAB:
+            self.saved = False
             current_buffer[current_cursor.pos.y] = current_buffer[current_cursor.pos.y][
                                                    :current_cursor.pos.x] + "    " + \
                                                    current_buffer[current_cursor.pos.y][current_cursor.pos.x:]
             current_cursor.pos.x += 4
+            # add new buffer for undo
+            self.add_to_undo()
 
         if event.key == pygame.K_ESCAPE:
             self.cmd_mode = not self.cmd_mode
@@ -197,6 +222,7 @@ class Editor:
                 self.cmd_mode = False
                 self.cmd_buffer.data = [""]
             else:
+                self.saved = False
                 first, second = self.buffer.data[self.cursor.pos.y][:self.cursor.pos.x], self.buffer.data[
                                                                                              self.cursor.pos.y][
                                                                                          self.cursor.pos.x:]
@@ -205,6 +231,8 @@ class Editor:
                 self.buffer.data.insert(self.cursor.pos.y + 1, second)
                 self.cursor.pos.y += 1
                 self.cursor.pos.x = len(self.buffer.data[self.cursor.pos.y]) - len(second)
+                # add new buffer for undo
+                self.add_to_undo()
 
     def loop(self):
         dt = 0
@@ -213,13 +241,35 @@ class Editor:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
+
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_z and pygame.key.get_pressed()[pygame.K_LCTRL]:
+                        try:
+                            new_buffer = sorted(self.saves, key=lambda x: x[2], reverse=True)[0]
+                            replace_buffer, replace_cursor, when = self.saves.pop(self.saves.index(new_buffer))
+                            self.buffer = replace_buffer
+                            self.cursor = replace_cursor
+                        except IndexError:
+                            pass
+                        break
+                    else:
+                        self.handle_key_event(event)
+
                 if event.type == pygame.TEXTINPUT:
                     self.handle_texinput_event(event)
-                if event.type == pygame.KEYDOWN:
-                    self.handle_key_event(event)
+
+            # check the undo data and clear if its too big
+            while sys.getsizeof(self.saves) / 1_000_000 > get_setting("undo-size"):
+                old_buffer = sorted(self.saves, key=lambda x: x[2])[0]
+                self.saves.pop(self.saves.index(old_buffer))
+                print("removing old buffer")
+
             self.draw_buffer()
             pygame.display.flip()
-            pygame.display.set_caption(self.operating_file_name)
+            if self.saved:
+                pygame.display.set_caption(self.operating_file_name)
+            else:
+                pygame.display.set_caption(self.operating_file_name + "*")
             dt = self.clock.tick(FPS)
 
 
