@@ -180,6 +180,11 @@ class Editor:
                                                            :current_cursor.pos.x - 1] + \
                                                            current_buffer[current_cursor.pos.y][current_cursor.pos.x:]
                     current_cursor.pos.x -= 1
+        if event.key == pygame.K_TAB:
+            current_buffer[current_cursor.pos.y] = current_buffer[current_cursor.pos.y][
+                                                   :current_cursor.pos.x] + "    " + \
+                                                   current_buffer[current_cursor.pos.y][current_cursor.pos.x:]
+            current_cursor.pos.x += 4
 
         if event.key == pygame.K_ESCAPE:
             self.cmd_mode = not self.cmd_mode
